@@ -10,6 +10,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -82,7 +83,7 @@ func (r *RepositoryManager) Initialize() error {
 func (r *RepositoryManager) checkToken(request *http.Request) error {
 	token := request.URL.Query().Get("token")
 	if token == "" {
-		token = request.FormValue("token")
+		token = request.Form.Get("token")
 	}
 	if token == "" || token != r.uploadToken {
 		return errors.New("token mismatch")
@@ -101,13 +102,13 @@ func (r *RepositoryManager) Upload(c *gin.Context) {
 		return
 	}
 	//validate the metadata
-	project = c.Request.FormValue("project")
+	project = c.GetString("project")
 	if len(project) == 0 {
 		c.Data(http.StatusBadRequest, "text/html", []byte("missing project"))
 		return
 	}
 
-	fileType = c.Request.FormValue("fileType")
+	fileType = c.GetString("fileType")
 	if len(fileType) == 0 {
 		c.Data(http.StatusBadRequest, "text/html", []byte("missing file type"))
 		return
@@ -168,20 +169,27 @@ func (r *RepositoryManager) Close() {
 
 func (r *RepositoryManager) LoadFrom(c *gin.Context) {
 	var (
-		isoUrl string
-		err    error
+		userimage app.UserImages
+		isoUrl    string
+		err       error
 	)
 	if err = r.checkToken(c.Request); err != nil {
 		c.JSON(http.StatusBadRequest, err.Error())
 		return
 	}
-	isoUrl = c.Request.FormValue("url")
+	isoUrl = c.Query("url")
 	if len(isoUrl) == 0 {
 		c.JSON(http.StatusBadRequest, app.ExportData(400, "FormValue", "missing url"))
 		return
 	}
-	checksum := strings.ToUpper(c.Request.FormValue("checksum"))
-	if len(checksum) == 0 {
+	userimage.UserId, _ = strconv.Atoi(c.Query("userid"))
+	if userimage.UserId <= 0 {
+		c.JSON(http.StatusBadRequest, app.ExportData(400, "FormValue", "missing userid"))
+		return
+	}
+
+	userimage.Checksum = strings.ToUpper(c.Query("checksum"))
+	if len(userimage.Checksum) == 0 {
 		c.JSON(http.StatusBadRequest, app.ExportData(400, "FormValue", "missing checksum"))
 		return
 	}
@@ -191,11 +199,20 @@ func (r *RepositoryManager) LoadFrom(c *gin.Context) {
 	targetDir := r.dataFolder
 	if strings.Contains(filename, ".") {
 		extName = strings.Split(filename, ".")[1]
+		if strings.Contains(extName, "?") {
+			extName = strings.Split(extName, "?")[0]
+		}
+		if strings.Contains(extName, "#") {
+			extName = strings.Split(extName, "#")[0]
+		}
+		if strings.Contains(extName, "&") {
+			extName = strings.Split(extName, "&")[0]
+		}
 		targetDir = path.Join(r.dataFolder, extName)
-		filename = checksum + "." + extName
+		filename = userimage.Checksum + "." + extName
 	} else {
 		targetDir = path.Join(r.dataFolder, "binary")
-		filename = checksum
+		filename = userimage.Checksum
 	}
 	fullPath = path.Join(targetDir, filename)
 	err = os.MkdirAll(targetDir, os.ModePerm)
@@ -208,16 +225,8 @@ func (r *RepositoryManager) LoadFrom(c *gin.Context) {
 	targetFile, _ = os.Open(fullPath)
 	if targetFile != nil {
 		defer targetFile.Close()
-		// targetFilebody, err := ioutil.ReadAll(targetFile)
-		// if err != nil {
-		// 	c.JSON(http.StatusBadRequest, app.ExportData(400, "ReadAll", err.Error()))
-		// 	return
-		// }
-		// fileMd5 := fmt.Sprintf("%X", md5.Sum(targetFilebody))
-		// if checksum == fileMd5 {
 		c.JSON(http.StatusConflict, app.ExportData(http.StatusConflict, "file exist", filename))
 		return
-		// }
 	}
 
 	//---------start download  file-----------
@@ -228,22 +237,29 @@ func (r *RepositoryManager) LoadFrom(c *gin.Context) {
 		return
 	}
 	defer response.Body.Close()
-
+	fmt.Println("================2")
 	responseBody, err := ioutil.ReadAll(response.Body)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, app.ExportData(400, "responseBody ReadAll", err.Error()))
 		return
 	}
 	fileMd5 := fmt.Sprintf("%X", md5.Sum(responseBody))
-	if checksum != fileMd5 {
+	if userimage.Checksum != fileMd5 {
 		c.JSON(http.StatusConflict, app.ExportData(http.StatusConflict, "file's md5 not equal checkSum ", fileMd5))
 		return
 	}
 
 	err = ioutil.WriteFile(fullPath, responseBody, os.ModePerm)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, app.ExportData(400, "Copy", err.Error()))
+		c.JSON(http.StatusBadRequest, app.ExportData(400, "WriteFile", err.Error()))
 		return
 	}
+	userimage.CreateTime = time.Now().In(app.CnTime)
+	err = app.AddUserImages(&userimage)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, app.ExportData(500, "AddUserImages", err.Error()))
+		return
+	}
+	fmt.Println("================4")
 	c.JSON(http.StatusOK, app.ExportData(400, "ok", filename))
 }
