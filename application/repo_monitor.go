@@ -62,7 +62,6 @@ func downLoadImages(image *app.Images, fullPath string) {
 
 		response.Body.Close()
 	}(&image.Status)
-	// var err error
 	request, err := http.NewRequest(http.MethodGet, image.SourceUrl, nil)
 	if err != nil {
 		image.Status = ImageStatusFailed
@@ -103,6 +102,7 @@ func downLoadImages(image *app.Images, fullPath string) {
 	if image.Checksum != checksumValue {
 		err = fmt.Errorf("file's md5 not equal checkSum ")
 		os.Remove(fullPath)
+		app.Logger.Error("--------------- os.Remove(fullPath): " + fullPath)
 		app.Logger.Error(image.Checksum + "---------------Checksum: " + checksumValue)
 		image.Status = ImageStatusFailed
 		return

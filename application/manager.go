@@ -28,9 +28,9 @@ const (
 	Toolchain              PackageType = "toolchain"
 	BuildImageFromRelease  string      = "buildimagefromrelease"
 	BuildImageFromISO      string      = "buildimagefromiso"
-	ImageStatusStart       string      = "start"
+	ImageStatusStart       string      = "created"
 	ImageStatusDownloading string      = "downloading"
-	ImageStatusDone        string      = "done"
+	ImageStatusDone        string      = "succeed"
 	ImageStatusFailed      string      = "failed"
 )
 
@@ -50,7 +50,7 @@ func NewRepositoryManager(routerGroup *gin.RouterGroup) (*RepositoryManager, err
 	conf := app.Config.StringMap("manager")
 	baseFolder := conf["dataFolder"]
 	if !fsutil.DirExist(baseFolder) {
-		color.Error.Printf("data folder %s not existed", baseFolder)
+		color.Error.Println("data folder %s not existed", baseFolder)
 		return nil, errors.New("data folder not existed")
 	}
 	token := conf["uploadToken"]
@@ -59,7 +59,7 @@ func NewRepositoryManager(routerGroup *gin.RouterGroup) (*RepositoryManager, err
 		token = tokenEnv
 	}
 	if len(token) == 0 {
-		color.Error.Printf("upload token is empty")
+		color.Error.Println("upload token is empty")
 		return nil, errors.New("upload token is empty")
 	}
 
@@ -111,19 +111,26 @@ func (r *RepositoryManager) Upload(c *gin.Context) {
 		image                                  app.Images
 		targetDir, fullPath, filename, extName string
 	)
-	if err := r.checkToken(c.Request); err != nil {
-		c.JSON(http.StatusBadRequest, app.ExportData(400, "checkToken", err.Error()))
-		return
-	}
+
 	err := c.MustBindWith(&image, binding.FormMultipart)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, app.ExportData(400, "BindQuery", err.Error()))
 		return
 	}
+	image.Checksum = strings.ToUpper(image.Checksum)
+	// temp, _ := json.Marshal(&image)
+	// fmt.Println("==============", string(temp))
+
+	// color.Error.Println(image.Name, "----------------0----", image.ExternalID)
 	srcFile, fileinfo, err := c.Request.FormFile("file")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, app.ExportData(400, "FormFile", err.Error()))
+		return
+	}
 	defer srcFile.Close()
 
-	if strings.Contains(fileinfo.Filename, ".") {
+	filename = fileinfo.Filename
+	if strings.Contains(filename, ".") {
 		splitList := strings.Split(filename, ".")
 		extName = splitList[len(splitList)-1]
 		if strings.Contains(extName, "?") {
@@ -135,28 +142,36 @@ func (r *RepositoryManager) Upload(c *gin.Context) {
 		if strings.Contains(extName, "&") {
 			extName = strings.Split(extName, "&")[0]
 		}
-
-		filename = image.Checksum + "." + extName
 	} else {
 		extName = "binary"
-		filename = image.Checksum
 	}
-	targetDir = path.Join(r.dataFolder, extName)
+
+	if len(image.Checksum) < 10 {
+		targetDir = path.Join(r.dataFolder, image.Type, image.ExternalID[0:3])
+		filename = image.ExternalID + "." + extName
+	} else {
+		filename = image.Checksum + "." + extName
+		targetDir = path.Join(r.dataFolder, image.Checksum[0:3])
+	}
+
 	fullPath = path.Join(targetDir, filename)
 	err = os.MkdirAll(targetDir, os.ModePerm)
 	if err != nil {
+		color.Error.Println(fullPath + "----------------MkdirAll----" + err.Error())
 		c.JSON(http.StatusInternalServerError, app.ExportData(http.StatusInternalServerError, "MkdirAll", err.Error()))
 		return
 	}
 
 	_, err = os.Stat(fullPath)
 	if err == nil {
+		color.Error.Println(fullPath + "----------------Stat----")
 		c.JSON(http.StatusInternalServerError, app.ExportData(http.StatusInternalServerError, "file exist", filename))
 		return
 	}
 
-	dstFile, err := os.OpenFile(fullPath, os.O_WRONLY|os.O_CREATE, 0666)
+	dstFile, err := os.OpenFile(fullPath, os.O_RDWR|os.O_CREATE, 0666)
 	if err != nil {
+		color.Error.Println(fullPath + "----------------OpenFile----" + err.Error())
 		c.JSON(http.StatusInternalServerError, app.ExportData(http.StatusInternalServerError, "OpenFile", err.Error()))
 		return
 	}
@@ -164,25 +179,30 @@ func (r *RepositoryManager) Upload(c *gin.Context) {
 	defer dstFile.Close()
 	//TODO: read & write in chunk?
 	if _, err := io.Copy(dstFile, srcFile); err != nil {
+		color.Error.Println("-------------file---Copy----" + err.Error())
 		c.JSON(http.StatusInternalServerError, app.ExportData(http.StatusInternalServerError, "Copy", err.Error()))
 		return
 	}
-
-	hash := sha256.New()
-	if _, err := io.Copy(hash, dstFile); err != nil {
-		image.Status = ImageStatusFailed
-		return
+	if len(image.Checksum) > 10 {
+		dstFile.Seek(0, io.SeekStart)
+		hash := sha256.New()
+		if _, err := io.Copy(hash, dstFile); err != nil {
+			color.Error.Println("---------------- io.Copy----" + err.Error())
+			image.Status = ImageStatusFailed
+			return
+		}
+		checksumValue := fmt.Sprintf("%X", hash.Sum(nil))
+		if image.Checksum != checksumValue {
+			color.Error.Println(image.Checksum + "---------------Checksum----" + checksumValue)
+			c.JSON(http.StatusBadRequest, app.ExportData(http.StatusBadRequest, "file's sha256sum not equal input checkSum ", checksumValue))
+			return
+		}
 	}
-	checksumValue := fmt.Sprintf("%X", hash.Sum(nil))
-	if image.Checksum != checksumValue {
-		c.JSON(http.StatusBadRequest, app.ExportData(http.StatusBadRequest, "file's sha256sum not equal input checkSum ", checksumValue))
-		return
-	}
-
 	image.ExtName = extName
 	image.Status = ImageStatusDone
 	err = app.AddImages(&image)
 	if err != nil {
+
 		c.JSON(http.StatusBadRequest, app.ExportData(http.StatusBadRequest, "AddUserImages", err.Error()))
 		return
 	}
@@ -197,21 +217,23 @@ func (r *RepositoryManager) Close() {
 }
 
 func (r *RepositoryManager) Query(c *gin.Context) {
-	if err := r.checkToken(c.Request); err != nil {
-		c.JSON(http.StatusBadRequest, app.ExportData(http.StatusBadRequest, "forbidden", err.Error()))
-		return
-	}
 	externalID := c.Query("externalID")
 	if len(externalID) == 0 {
 		c.JSON(http.StatusBadRequest, app.ExportData(http.StatusBadRequest, "bad request", "missing externalID"))
 		return
 	}
-	item, err := app.GetImagesByExternalID(externalID)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, app.ExportData(http.StatusBadRequest, "error", err.Error()))
+	item, _ := app.GetImagesByExternalID(externalID)
+	if item == nil {
+		c.JSON(http.StatusBadRequest, app.ExportData(http.StatusBadRequest, "externalID not found ", externalID))
 		return
 	}
-	downloadURL := "/data/browse/" + item.ExtName + "/" + item.Checksum
+
+	downloadURL := " "
+	if item.Type == BuildImageFromISO {
+		downloadURL = "/data/browse/" + item.Type + "/" + item.ExternalID[0:3] + "/" + item.ExternalID
+	} else {
+		downloadURL = "/data/browse/" + item.Checksum[0:3] + "/" + item.Checksum
+	}
 	if item.ExtName != "binary" {
 		downloadURL = downloadURL + "." + item.ExtName
 	}
@@ -263,7 +285,7 @@ func (r *RepositoryManager) LoadFrom(c *gin.Context) {
 		extName = "binary"
 		filename = image.Checksum
 	}
-	targetDir = path.Join(r.dataFolder, extName)
+	targetDir = path.Join(r.dataFolder, image.Checksum[0:3])
 	fullPath = path.Join(targetDir, filename)
 	err = os.MkdirAll(targetDir, os.ModePerm)
 	if err != nil {
