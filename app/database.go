@@ -40,7 +40,7 @@ func InitDB() (err error) {
 		dbPort = os.Getenv("DB_PORT")
 	}
 
-	sqlStr := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8&parseTime=True&loc=Local", dbUser, dbPswd, dbHost, dbPort, dbName)
+	sqlStr := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8mb4&parseTime=True&loc=Local&TimeZone=Asia/Shanghai", dbUser, dbPswd, dbHost, dbPort, dbName)
 
 	db, err = gorm.Open(mysql.New(mysql.Config{
 		DSN:                       sqlStr, // DSN data source name

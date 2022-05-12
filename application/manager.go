@@ -114,17 +114,13 @@ func (r *RepositoryManager) Upload(c *gin.Context) {
 
 	err := c.MustBindWith(&image, binding.FormMultipart)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, app.ExportData(400, "BindQuery", err.Error()))
+		c.JSON(http.StatusBadRequest, app.ExportData(http.StatusBadRequest, "MustBindWith", err.Error()))
 		return
 	}
 	image.Checksum = strings.ToUpper(image.Checksum)
-	// temp, _ := json.Marshal(&image)
-	// fmt.Println("==============", string(temp))
-
-	// color.Error.Println(image.Name, "----------------0----", image.ExternalID)
 	srcFile, fileinfo, err := c.Request.FormFile("file")
 	if err != nil {
-		c.JSON(http.StatusBadRequest, app.ExportData(400, "FormFile", err.Error()))
+		c.JSON(http.StatusBadRequest, app.ExportData(http.StatusBadRequest, "FormFile", err.Error()))
 		return
 	}
 	defer srcFile.Close()
@@ -177,7 +173,6 @@ func (r *RepositoryManager) Upload(c *gin.Context) {
 	}
 
 	defer dstFile.Close()
-	//TODO: read & write in chunk?
 	if _, err := io.Copy(dstFile, srcFile); err != nil {
 		color.Error.Println("-------------file---Copy----" + err.Error())
 		c.JSON(http.StatusInternalServerError, app.ExportData(http.StatusInternalServerError, "Copy", err.Error()))
@@ -212,6 +207,7 @@ func (r *RepositoryManager) StartLoop() {
 }
 
 func (r *RepositoryManager) Close() {
+	//todo :
 
 }
 
@@ -223,7 +219,7 @@ func (r *RepositoryManager) Query(c *gin.Context) {
 	}
 	item, _ := app.GetImagesByExternalID(externalID)
 	if item == nil {
-		c.JSON(http.StatusBadRequest, app.ExportData(http.StatusBadRequest, "externalID not found ", externalID))
+		c.JSON(http.StatusBadRequest, app.ExportData(http.StatusBadRequest, "image not found by this externalID", externalID))
 		return
 	}
 
@@ -292,20 +288,22 @@ func (r *RepositoryManager) LoadFrom(c *gin.Context) {
 		return
 	}
 	image.ExtName = extName
-	_, err = os.Stat(fullPath)
-	if err == nil {
-		c.JSON(http.StatusBadRequest, app.ExportData(http.StatusBadRequest, "file exist", filename))
-		return
-	}
 	image.CreateTime = time.Now().In(app.CnTime)
-	image.Status = ImageStatusStart
+	_, err = os.Stat(fullPath)
+	if err != nil {
+		// if this file not exist .then download it .
+		image.Status = ImageStatusStart
+		go downloadImages(&image, fullPath)
+	} else {
+		//if this file exist . then use it . and mark it succeed
+		image.Status = ImageStatusDone
+		image.UpdateTime = time.Now().In(app.CnTime)
+	}
 	err = app.AddImages(&image)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, app.ExportData(http.StatusInternalServerError, "AddImages", err.Error()))
 		return
 	}
-	//---------start download  file-----------
 
-	go downLoadImages(&image, fullPath)
 	c.JSON(http.StatusCreated, app.ExportData(http.StatusCreated, "ok", filename))
 }

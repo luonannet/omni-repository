@@ -16,7 +16,7 @@ import (
 type RepoMonitor struct {
 }
 
-func downLoadImages(image *app.Images, fullPath string) {
+func downloadImages(image *app.Images, fullPath string) {
 	image.Status = ImageStatusStart
 	var response *http.Response
 	defer func(status *string) {
@@ -45,7 +45,7 @@ func downLoadImages(image *app.Images, fullPath string) {
 			app.Logger.Error(fmt.Sprintf("UpdateImagesStatus callback err:%s", err))
 			return
 		}
-		if response.StatusCode != 200 {
+		if response.StatusCode != http.StatusOK {
 			responseBody, _ := ioutil.ReadAll(response.Body)
 			app.Logger.Error(fmt.Sprintf("downLoadImages Callback Error:%s ", string(responseBody)))
 		}
@@ -90,9 +90,8 @@ func downLoadImages(image *app.Images, fullPath string) {
 	}
 	checksumValue := fmt.Sprintf("%X", hash.Sum(nil))
 	if image.Checksum != checksumValue {
-		err = fmt.Errorf("file's md5 not equal checkSum ")
+		err = fmt.Errorf("file's sha256 not equal checkSum ")
 		os.Remove(fullPath)
-		app.Logger.Error("--------------- os.Remove(fullPath): " + fullPath)
 		app.Logger.Error(image.Checksum + "---------------Checksum: " + checksumValue)
 		image.Status = ImageStatusFailed
 		return

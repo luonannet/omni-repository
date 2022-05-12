@@ -12,12 +12,8 @@
 *.dylib
 # Test binary, built with `go test -c`
 *.test
-<<<<<<< HEAD
 config/prod.app.toml
 config/prod.env
-=======
-conf/app_prod.json
->>>>>>> 1329830e48f5b741991b7924bc21bd940e46b424
 data/
 # Output of the go coverage tool, specifically when used with LiteIDE
 *.out
@@ -25,8 +21,4 @@ data/
 # vendor/
 swagger.zip
 .idea
-<<<<<<< HEAD
 vendor
-=======
-vendor
->>>>>>> 1329830e48f5b741991b7924bc21bd940e46b424
