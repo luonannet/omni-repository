@@ -99,6 +99,9 @@ func (r *RepositoryManager) checkToken(request *http.Request) error {
 	if token == "" {
 		token = request.URL.Query().Get("token")
 	}
+	if token == "" {
+		token = request.URL.Query().Get("token")
+	}
 	if token == "" || token != r.uploadToken {
 		return errors.New(token + "token mismatch:" + r.uploadToken)
 	}
@@ -197,6 +200,7 @@ func (r *RepositoryManager) Upload(c *gin.Context) {
 	image.Status = ImageStatusDone
 	err = app.AddImages(&image)
 	if err != nil {
+
 		c.JSON(http.StatusBadRequest, app.ExportData(http.StatusBadRequest, "AddUserImages", err.Error()))
 		return
 	}
@@ -304,6 +308,5 @@ func (r *RepositoryManager) LoadFrom(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, app.ExportData(http.StatusInternalServerError, "AddImages", err.Error()))
 		return
 	}
-
 	c.JSON(http.StatusCreated, app.ExportData(http.StatusCreated, "ok", filename))
 }
