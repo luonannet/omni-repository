@@ -29,7 +29,7 @@ const (
 	BuildImageFromRelease  string      = "buildimagefromrelease"
 	BuildImageFromISO      string      = "buildimagefromiso"
 	ImageStatusStart       string      = "created"
-	ImageStatusDownloading string      = "downloading"
+	ImageStatusDownloading string      = "running"
 	ImageStatusDone        string      = "succeed"
 	ImageStatusFailed      string      = "failed"
 )
@@ -302,6 +302,8 @@ func (r *RepositoryManager) LoadFrom(c *gin.Context) {
 		//if this file exist . then use it . and mark it succeed
 		image.Status = ImageStatusDone
 		image.UpdateTime = time.Now().In(app.CnTime)
+		fmt.Println(image.Checksum + "已经存在 " + image.SourceUrl)
+
 	}
 	err = app.AddImages(&image)
 	if err != nil {
