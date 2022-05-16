@@ -23,7 +23,6 @@ func InitDB() (err error) {
 	dbPswd := conf["dbPswd"]
 	dbName := conf["dbName"]
 	dbPort := conf["dbPort"]
-
 	if os.Getenv("DB_HOST") != "" {
 		dbHost = os.Getenv("DB_HOST")
 	}
@@ -39,8 +38,7 @@ func InitDB() (err error) {
 	if os.Getenv("DB_PORT") != "" {
 		dbPort = os.Getenv("DB_PORT")
 	}
-
-	sqlStr := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8mb4&parseTime=True&loc=Local&TimeZone=Asia/Shanghai", dbUser, dbPswd, dbHost, dbPort, dbName)
+	sqlStr := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8mb4&parseTime=True&loc=Local", dbUser, dbPswd, dbHost, dbPort, dbName)
 
 	db, err = gorm.Open(mysql.New(mysql.Config{
 		DSN:                       sqlStr, // DSN data source name
@@ -58,7 +56,6 @@ func InitDB() (err error) {
 	if err != nil {
 		return err
 	}
-
 	// SetMaxIdleConns
 	sqlDB.SetMaxIdleConns(10)
 	// SetMaxOpenConns
@@ -100,8 +97,16 @@ func (t *Images) TableName() string {
 // last inserted ID on success.
 func AddImages(m *Images) (err error) {
 	o := GetDB()
+	fmt.Println("---------------------------1", o)
 	m.CreateTime = time.Now().In(CnTime)
-	result := o.Debug().Create(m)
+	fmt.Println("---------------------------2", m)
+
+	v := new(Images)
+	v.ID = 130
+	o.Model(v)
+	fmt.Println("----------2.5:", v)
+	result := o.Model(m).Create(m)
+	fmt.Println("---------------------------3", result)
 	return result.Error
 }
 func UpdateImages(m *Images) (err error) {
