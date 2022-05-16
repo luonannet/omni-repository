@@ -1,4 +1,4 @@
-name = "OmniRepository"
+name = "omni_repository"
 timezone = "PRC"
 httpPort = 8080
 serverName = "localhost:8080"
