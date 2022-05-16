@@ -14,8 +14,11 @@ ARG home=/app
 
 USER ${user}
 WORKDIR ${home}
+RUN ls /app
 COPY --chown=${user} --from=builder /app/omni-repository .
+RUN ls /app
 COPY --chown=${user} ./config/prod.app.toml ./config/app.toml
+RUN ls /app
 COPY --chown=${user} ./config/prod.env ./config/.env
 RUN ls /app
 # to fix the directory permission issue
