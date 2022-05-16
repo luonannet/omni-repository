@@ -15,7 +15,7 @@ ARG home=/app
 USER ${user}
 WORKDIR ${home}
 RUN ls /app
-COPY --chown=${user} --from=builder /app/omni-repository .
+COPY --chown=${user} --from=builder /app/omni-repository /app
 RUN ls /app
 COPY --chown=${user} ./config/prod.app.toml ./config/app.toml
 RUN ls /app
