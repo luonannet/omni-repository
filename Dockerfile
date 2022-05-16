@@ -17,10 +17,11 @@ WORKDIR ${home}
 COPY --chown=${user} --from=builder /app/omni-repository .
 COPY --chown=${user} ./config/prod.app.toml ./config/app.toml
 COPY --chown=${user} ./config/prod.env ./config/.env
+RUN ls /app
 # to fix the directory permission issue
 RUN mkdir -p ${home}/logs $$ -p ${home}/data
 VOLUME ["${home}/logs","${home}/data"]
-
+RUN ls /app
 ENV PATH="${home}:${PATH}"
 ENV APP_ENV="prod"
 EXPOSE 8080
